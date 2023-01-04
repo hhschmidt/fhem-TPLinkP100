@@ -10,18 +10,19 @@
 #  It support switching on and of the outlet 
 #
 #  Requirements
-#  	Perl Module: 
+#  	Perl Module: IO::Socket::Timeout
+#  	Perl Module: IO::Socket::INET
+#  	Perl Module: Crypt::CBC
+#  	Perl Module: Crypt:OpenSSL::RSA
+#                installing this module may require system package 'libssl-dev'
+#  	Perl Module: UUID
+#                installing this module may require system package 'uuid-dev'
 #  	
-#  	In recent debian based distributions IO::Socket::Timeout can
-#  	be installed by "apt-get install libio-socket-timeout-perl"
-#  	In older distribution try "cpan IO::Socket::Timeout"
-#
 #  Origin: #  https://github.com/hhschmidt/fhem-TPLinkP100
 #
 ################################################################
 
 # TODO
-# * UseCase: status persistance over server restart
 # * UseCase: device restart while server running
 #            siehe hier: https://wiki.fhem.de/wiki/DevelopmentModuleIntro#X_Ready
 # * Description
@@ -30,12 +31,13 @@
 # Internals: für Geräte spezifische Informationen, werden in _Define gesetzt // Attribute können zur Laufzeit geändert werden
 
 
+# package Tapo100
 ########################################################################
-# this package has been copied from here:
-# https://forum.fhem.de/index.php/topic,119865.msg1222670.html#msg1222670
-# https://forum.fhem.de/index.php?action=dlattach;topic=119865.0;attach=162308
-# credit goes to Peter "erdferkel" (https://forum.fhem.de/index.php?action=profile;u=51277)
 {
+	# this package has been copied from here:
+	# https://forum.fhem.de/index.php/topic,119865.msg1222670.html#msg1222670
+	# https://forum.fhem.de/index.php?action=dlattach;topic=119865.0;attach=162308
+	# credit goes to Peter "erdferkel" (https://forum.fhem.de/index.php?action=profile;u=51277)
 	package TapoP100;
 	
 	use Digest::SHA qw(sha1_hex);
@@ -315,15 +317,9 @@ sub TPLinkP100_Get($$@) {
 	return undef if IsDisabled ($hash);	
 	return "get needs at least one argument" unless(defined($opt));
 	
-	my $result = "<undef>";
-	if($opt eq "status") 
-	{
-		Debug ("TPLinkP100: Get(status)");
-		my $p100 = $hash->{P100};
-		return "TPLinkP100_Get() invalid device ref" if !$p100;
-		return $p100->isOn() ? "on" : "off";
-	}
-	
+	if($opt eq "status") {
+		return ReadingsVal ($hash->{NAME}, "status", "off");;
+	} 
 	return "unknown argument $opt choose one of status";
 }
 
@@ -367,23 +363,24 @@ sub TPLinkP100_Set($$@) {
 sub TPLinkP100_GetUpdate ($) {
 	my ($hash) = @_;
 	
-	if ($hash->{STATE} eq "disconnected") {
-		TPLinkP100_Connect ($hash);
-	}
-	
-	if (! IsDisabled ($hash)) {
-		my $p100 = $hash->{P100};
-		return "TPLinkP100_GetUpdate() invalid device ref" if !$p100;
-		my $oldStatus = ReadingsVal ($hash->{NAME}, "status", "off");
-		my $newStatus = $p100->isOn() ? "on" : "off";
-	
-		if ($oldStatus ne $newStatus) {
-			my $ret = readingsSingleUpdate ($hash, "status", $newStatus, 1);
-			Debug ("TPLinkP100_GetUpdate() : readingsSingleUpdate( $oldStatus $newStatus -> $ret )");
-		}
-	}
-	
+	# repeated polling of data from device
 	InternalTimer(gettimeofday()+$hash->{Interval}, "TPLinkP100_GetUpdate", $hash);
+	
+	return if IsDisabled ($hash);
+	return if (($hash->{STATE} eq "disconnected") && !TPLinkP100_Connect ($hash));
+	
+	my $p100 = $hash->{P100};
+	return "TPLinkP100_GetUpdate() invalid device ref" if !$p100;
+	my $oldStatus = ReadingsVal ($hash->{NAME}, "status", "off");
+	
+	Debug ("TPLinkP100_GetUpdate() : starting communication to device ...");
+	my $newStatus = $p100->isOn() ? "on" : "off";
+	Debug ("TPLinkP100_GetUpdate() : ... call returned");
+	
+	if ($oldStatus ne $newStatus) {
+		my $ret = readingsSingleUpdate ($hash, "status", $newStatus, 1);
+		# Debug ("TPLinkP100_GetUpdate() : readingsSingleUpdate( $oldStatus $newStatus -> $ret )");
+	}
 }
 
 sub TPLinkP100_Connect ($) {
@@ -392,6 +389,8 @@ sub TPLinkP100_Connect ($) {
 	return 0 if IsDisabled ($hash); 
 	
 	my $p100 = TapoP100->new($hash->{url});
+	
+	# this is a blocking call, can get stuck completely when device not available -> TODO change to async
 	$p100->login($hash->{username}, $hash->{passwd});
 	$hash->{P100} = $p100;
 	$hash->{STATE} = "active";
