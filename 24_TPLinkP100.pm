@@ -1,31 +1,23 @@
 ################################################################
-# $Id: 24_TPLinkP100.pm 25206 2021-11-09 11:55:44Z vk $
-#
-#  Release 2020-04-12
-#
 #  Copyright notice
 #
-#  (c) 2016 Copyright: Volker Kettenbach
-#  e-mail: volker at kettenbach minus it dot de
+#  (c) 2023 Copyright: Henning Schmidt
+#  e-mail: fhem at hhschmidt dot de
 #
 #  Description:
-#  This is an FHEM-Module for the TP Link TPLinkP100110/110 
+#  This is an FHEM-Module for the TP Link TPLinkP100/110 
 #  wifi controlled power outlet.
-#  It support switching on and of the outlet as well as switching
-#  on and of the nightmode (green led off).
-#  It supports reading several readings as well as the
-#  realtime power readings of the HS110.
+#  It support switching on and of the outlet 
 #
 #  Requirements
-#  	Perl Module: IO::Socket::INET
-#  	Perl Module: IO::Socket::Timeout
+#  	Perl Module: 
 #  	
 #  	In recent debian based distributions IO::Socket::Timeout can
 #  	be installed by "apt-get install libio-socket-timeout-perl"
 #  	In older distribution try "cpan IO::Socket::Timeout"
 #
 #  Origin:
-#  https://gitlab.com/volkerkettenbach/FHEM-TPLink-Kasa
+#  https://github.com/hhschmidt/fhem-p100
 #
 ################################################################
 
