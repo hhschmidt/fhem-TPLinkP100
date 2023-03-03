@@ -288,7 +288,7 @@ sub TPLinkP100_Define($$) {
 	}
 	
 	
-	Debug ("TPLinkP100_Define: $name $url $username $passwd $inter");
+	# Debug ("TPLinkP100_Define: $name $url $username $passwd $inter");
 	
 	$hash->{url} 		= $url;
 	$hash->{username} 	= $username;
@@ -344,7 +344,7 @@ sub TPLinkP100_Set($$@) {
 		}
 	}
 	if ($setOnOff != -1) {
-		Debug ("TPLinkP100: setOnOff $setOnOff ");
+		# Debug ("TPLinkP100: setOnOff $setOnOff ");
 		my $p100 = $hash->{P100};
 		return "TPLinkP100_Set() invalid device ref" if !$p100;
 		$p100->switch($setOnOff);
@@ -373,9 +373,9 @@ sub TPLinkP100_GetUpdate ($) {
 	return "TPLinkP100_GetUpdate() invalid device ref" if !$p100;
 	my $oldStatus = ReadingsVal ($hash->{NAME}, "status", "off");
 	
-	Debug ("TPLinkP100_GetUpdate() : starting communication to device ...");
+	# Debug ("TPLinkP100_GetUpdate() : starting communication to device ...");
 	my $newStatus = $p100->isOn() ? "on" : "off";
-	Debug ("TPLinkP100_GetUpdate() : ... call returned");
+	# Debug ("TPLinkP100_GetUpdate() : ... call returned");
 	
 	if ($oldStatus ne $newStatus) {
 		my $ret = readingsSingleUpdate ($hash, "status", $newStatus, 1);
