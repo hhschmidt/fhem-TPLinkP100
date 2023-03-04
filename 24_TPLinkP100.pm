@@ -22,14 +22,6 @@
 #
 ################################################################
 
-# TODO
-# * UseCase: device restart while server running
-#            siehe hier: https://wiki.fhem.de/wiki/DevelopmentModuleIntro#X_Ready
-# * Description
-
-# NOTES
-# Internals: für Geräte spezifische Informationen, werden in _Define gesetzt // Attribute können zur Laufzeit geändert werden
-
 
 # package Tapo100
 ########################################################################
@@ -93,8 +85,8 @@
 		);
 	
 		my $info=defined $errmsg{$errno} ? $errmsg{$errno} : 'Unknown error';
-		print STDERR "ERROR $errno: $info\n";
-		exit(-1);
+		print STDERR "TapoP100: ERROR $errno: $info\n";
+		return ();
 	}
 	
 	
@@ -102,7 +94,7 @@
 	sub jsonpost {
 		my($self, $json)=@_;
 	
-		my $ua=LWP::UserAgent->new();
+		my $ua=LWP::UserAgent->new(timeout => 10);
 		my $url=$self->{URL};
 		$url.='?token='.$self->{TPTOKEN} if (defined $self->{TPTOKEN});
 		my $request=HTTP::Request->new(POST => $url);
@@ -112,9 +104,9 @@
 		$request->content($json);
 		my $res=$ua->request($request);
 		if (!$res->is_success) {
-			print STDERR 'HTTP return code: '.$res->code."\n";
-			print STDERR 'HTTP message: '.$res->message."\n";
-			exit(-1);
+			# print STDERR 'TapoP100: HTTP return code: '.$res->code."\n";
+			print STDERR 'TapoP100: HTTP message: '.$res->message."\n";
+			return ();
 		}
 	
 		if (!defined $self->{COOKIE}) {
@@ -182,6 +174,7 @@
 		my %ret=$self->jsonpost($self->jsoncmd('handshake', (
 			key => $self->{RSAKEY}->get_public_key_x509_string()
 		)));
+		return () if (!%ret);
 	
 		my $tpkey_crypted=decode_base64($ret{result}->{key});
 		my $tpkey=$self->{RSAKEY}->decrypt($tpkey_crypted);
@@ -196,12 +189,13 @@
 		my $username_encoded=$self->base64(sha1_hex($username));
 		my $password_encoded=$self->base64($password);
 	
-		$self->handshake() if (!defined $self->{TPKEY});
+		return () if ((!defined $self->{TPKEY}) && !$self->handshake());
 	
 		my %ret=$self->post_encrypted('login_device', (
 			username => $username_encoded,
 			password => $password_encoded
 		));
+		return () if (!%ret);
 	
 		$self->{TPTOKEN}=$ret{result}->{token};
 	}
@@ -229,6 +223,7 @@
 	sub isOn {
 		my($self)=@_;
 		my %ret=$self->info();
+		return (-1) if (!%ret);
 		return ($ret{result}->{device_on} == JSON::true);
 	}
 	
@@ -237,6 +232,7 @@
 	sub name {
 		my($self)=@_;
 		my %ret=$self->info();
+		return () if (!%ret);
 		return decode_base64($ret{result}->{nickname});
 	}
 	
@@ -288,7 +284,7 @@ sub TPLinkP100_Define($$) {
 	}
 	
 	
-	Debug ("TPLinkP100_Define: $name $url $username $passwd $inter");
+	# Debug ("TPLinkP100_Define: $name $url $username $passwd $inter");
 	
 	$hash->{url} 		= $url;
 	$hash->{username} 	= $username;
@@ -344,10 +340,12 @@ sub TPLinkP100_Set($$@) {
 		}
 	}
 	if ($setOnOff != -1) {
-		Debug ("TPLinkP100: setOnOff $setOnOff ");
+		# Debug ("TPLinkP100: setOnOff $setOnOff ");
 		my $p100 = $hash->{P100};
 		return "TPLinkP100_Set() invalid device ref" if !$p100;
-		$p100->switch($setOnOff);
+		if (!$p100->switch($setOnOff)) {
+			TPLinkP100_Disconnect ($hash);
+		}
 		return undef;
 	}
 	
@@ -373,10 +371,15 @@ sub TPLinkP100_GetUpdate ($) {
 	return "TPLinkP100_GetUpdate() invalid device ref" if !$p100;
 	my $oldStatus = ReadingsVal ($hash->{NAME}, "status", "off");
 	
-	Debug ("TPLinkP100_GetUpdate() : starting communication to device ...");
+	# Debug ("TPLinkP100_GetUpdate() : starting communication to device ...");
+	my $ret = $p100->isOn();
+	# Debug ("TPLinkP100_GetUpdate() : ... call returned");
+	if (-1 == $ret) {
+		# Debug ("TPLinkP100_getUpdate() ... isOn() failed");
+		TPLinkP100_Disconnect ($hash);
+		return ();
+	}
 	my $newStatus = $p100->isOn() ? "on" : "off";
-	Debug ("TPLinkP100_GetUpdate() : ... call returned");
-	
 	if ($oldStatus ne $newStatus) {
 		my $ret = readingsSingleUpdate ($hash, "status", $newStatus, 1);
 		# Debug ("TPLinkP100_GetUpdate() : readingsSingleUpdate( $oldStatus $newStatus -> $ret )");
@@ -391,12 +394,25 @@ sub TPLinkP100_Connect ($) {
 	my $p100 = TapoP100->new($hash->{url});
 	
 	# this is a blocking call, can get stuck completely when device not available -> TODO change to async
-	$p100->login($hash->{username}, $hash->{passwd});
+	if (! $p100->login($hash->{username}, $hash->{passwd})) {
+		# Debug ("TPLinkP100_connect() ... login() failed");
+		return 0;
+	}
 	$hash->{P100} = $p100;
 	$hash->{STATE} = "active";
-	return 1; # TODO: error handling
+	# Debug ("TPLinkP100_connect() ... OK");
+	return 1;
 }
 
+sub TPLinkP100_Disconnect ($) {
+	my ($hash) = @_;
+	undef $hash->{P100} if ($hash->{P100});
+
+	$hash->{STATE} = "disconnected";
+	$hash->{P100} = undef;
+	# Debug ("TPLinkP100_disconnect() ... done");
+	return 1;
+}
 
 
 1;
