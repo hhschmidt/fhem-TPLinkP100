@@ -22,14 +22,6 @@
 #
 ################################################################
 
-# TODO
-# * UseCase: device restart while server running
-#            siehe hier: https://wiki.fhem.de/wiki/DevelopmentModuleIntro#X_Ready
-# * Description
-
-# NOTES
-# Internals: für Geräte spezifische Informationen, werden in _Define gesetzt // Attribute können zur Laufzeit geändert werden
-
 
 # package Tapo100
 ########################################################################
